@@ -7,8 +7,8 @@ namespace Wireframe_space.NetCode
     class PlayerServer : IPlayer
     {
         public int playerId = -1;
+        public static Subject player;
 
-        private Subject player;
         private MultiplayerManager manager;
         private Server server;
         private VertexPositionColor[] points = new VertexPositionColor[8]
@@ -29,6 +29,8 @@ namespace Wireframe_space.NetCode
             0, 4, 1, 5, 2, 6, 3, 7,         //side edges
         };
         private PlayerControl control;
+
+        BEPUutilities.Vector3 compensation = BEPUutilities.Vector3.Zero;
 
         public PlayerServer(MultiplayerManager manager, Server server)
         {
@@ -78,6 +80,7 @@ namespace Wireframe_space.NetCode
 
             manager.commands.Remove(cmd);
         }
+
         public void DestroyObj(float[] cmd)
         {
             manager.space.Remove(manager.space.Entities[(int)cmd[1]]);
@@ -87,14 +90,18 @@ namespace Wireframe_space.NetCode
 
             manager.commands.Remove(cmd);
         }
+
         public void Update(GameTime gameTime)
         {
-            if (player != null)
+            if (player != null && manager.game.IsActive)
             {
-                Vector3 p = control.Update(gameTime);
+                Vector3 p = control.Update(gameTime, player.entity.LinearVelocity, out compensation);
                 //player.entity.Position += new BEPUutilities.Vector3(p.X, p.Y, p.Z);
                 //player.entity.LinearVelocity = BEPUutilities.Vector3.Zero;
+                player.entity.LinearVelocity += compensation;
                 player.entity.LinearVelocity += new BEPUutilities.Vector3(p.X, p.Y, p.Z);
+                BEPUutilities.Vector3 q = player.entity.Position;
+                Subject.cameraPos = new Vector3(q.X, q.Y, q.Z);
             }
             for (int i = 0; i < manager.subjects.Count; i++)
             {
@@ -102,9 +109,20 @@ namespace Wireframe_space.NetCode
                     manager.subjects[i].entity.LinearVelocity = new BEPUutilities.Vector3(-0.1f * i, 0, 0);
             }
         }
+
         public void Draw()
         {
+            SpriteBatch sb = manager.game.Services.GetService<SpriteBatch>();
+
+            string speed = "X: " + player.entity.LinearVelocity.X.ToString("0.000") + " Y: " + player.entity.LinearVelocity.Y.ToString("0.000") + " Z: " + player.entity.LinearVelocity.Z.ToString("0.000");
+            string comp = "X: " + compensation.X.ToString("0.000") + " Y: " + compensation.Y.ToString("0.000") + " Z: " + compensation.Z.ToString("0.000");
+
+            sb.Begin();
+            sb.DrawString(manager.font, speed, new Vector2(0, 0), Color.White);
+            sb.DrawString(manager.font, comp, new Vector2(20, 30), Color.White);
+            sb.End();
         }
+
         public void DealDamage(float[] command)
         {
 

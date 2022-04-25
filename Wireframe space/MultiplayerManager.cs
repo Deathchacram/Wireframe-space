@@ -62,7 +62,7 @@ namespace Wireframe_space
         protected override void LoadContent()
         {
             NatUtility.DeviceFound += DeviceFound;
-            NatUtility.DeviceLost += DeviceLost;
+            //NatUtility.DeviceLost += DeviceLost;
             NatUtility.StartDiscovery();
 
             Subject.basicEffect = game.Content.Load<Effect>("BaseEffect");
@@ -144,13 +144,15 @@ namespace Wireframe_space
         {
             GraphicsDevice.Clear(Color.Black);
 
+            player.Draw();
             SpriteBatch sb = game.Services.GetService<SpriteBatch>();
             if (isServer)
             {
                 sb.Begin();
-                sb.DrawString(font, server.users.Count.ToString(), new Vector2(0, 0), Color.White);
-                sb.DrawString(font, space.Entities.Count.ToString(), new Vector2(0, 20), Color.White);
-                sb.DrawString(font, s, new Vector2(0, 40), Color.White);
+                //sb.DrawString(font, server.users.Count.ToString(), new Vector2(0, 0), Color.White);
+                //sb.DrawString(font, space.Entities.Count.ToString(), new Vector2(0, 20), Color.White);
+                sb.DrawString(font, "O", new Vector2(395, 235), Color.White);
+                //sb.DrawString(font, s, new Vector2(0, 40), Color.White);
                 sb.End();
 
                 for (int i = 0; i < subjects.Count; i++)
@@ -197,24 +199,33 @@ namespace Wireframe_space
             return subjects.Count;
         }
 
-        private void DeviceFound(object sender, DeviceEventArgs args)
+        private async void DeviceFound(object sender, DeviceEventArgs args)
         {
             device = args.Device;
 
-            //device.DeletePortMap(new Mapping(Protocol.Tcp, 26386, 26386));
-            //device.DeletePortMap(new Mapping(Protocol.Udp, 26387, 26387));
 
             if (isServer)
             {
-                if (device.GetSpecificMapping(Protocol.Tcp, 26386).PublicPort == -1)
-                    device.CreatePortMap(new Mapping(Protocol.Tcp, 26386, 26386));
+                //if (device.GetSpecificMapping(Protocol.Tcp, 26386).PublicPort == -1)
+                device.CreatePortMap(new Mapping(Protocol.Tcp, 26386, 26386, 0, "tcp1"));
 
-                if (device.GetSpecificMapping(Protocol.Udp, 26388).PublicPort == -1)
-                    device.CreatePortMap(new Mapping(Protocol.Udp, 26388, 26388));
+                //if (device.GetSpecificMapping(Protocol.Udp, 26388).PublicPort == -1)
+                device.CreatePortMap(new Mapping(Protocol.Udp, 26388, 26388, 0, "udp2"));
             }
-            else if (device.GetSpecificMapping(Protocol.Udp, 26387).PublicPort == -1)
-                device.CreatePortMap(new Mapping(Protocol.Udp, 26387, 26387));
+            //else if (device.GetSpecificMapping(Protocol.Udp, 26387).PublicPort == -1)
+            else
+                device.CreatePortMap(new Mapping(Protocol.Udp, 26387, 26387, 0, "udp1"));
 
+            /*if (isServer)
+            {
+                device.DeletePortMap(new Mapping(Protocol.Tcp, 26386, 26386, 0, "tcp1"));
+                device.DeletePortMap(new Mapping(Protocol.Udp, 26388, 26388, 0, "udp2"));
+            }
+            else
+                device.DeletePortMap(new Mapping(Protocol.Udp, 26387, 26387, 0, "udp1"));*/
+
+            //var mappings = await device.GetAllMappingsAsync();
+            //int i = 0;
             /*foreach (Mapping portMap in device.GetAllMappings())
                 s += '\n' + portMap.ToString();*/
 

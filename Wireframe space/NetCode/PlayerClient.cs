@@ -10,8 +10,8 @@ namespace Wireframe_space.NetCode
     class PlayerClient : IPlayer
     {
         public int playerId = -1;
+        public static Subject player;
 
-        private Subject player;
         private bool flag = false, flag2 = false;
         private MultiplayerManager manager;
         private VertexPositionColor[] points = new VertexPositionColor[8]
@@ -77,6 +77,7 @@ namespace Wireframe_space.NetCode
 
             manager.commands.Remove(cmd);
         }
+
         public void DestroyObj(float[] cmd)
         {
             try
@@ -98,6 +99,7 @@ namespace Wireframe_space.NetCode
             }
             catch { };
         }
+
         public void Update(GameTime gameTime)
         {
             if (manager.client.connected && !flag)
@@ -115,12 +117,15 @@ namespace Wireframe_space.NetCode
                 flag2 = true;
             }
 
-            if (player != null)
+            if (player != null && manager.game.IsActive)
             {
-                Vector3 p = control.Update(gameTime);
+                BEPUutilities.Vector3 compensation = BEPUutilities.Vector3.Zero;
+                Vector3 p = control.Update(gameTime, player.entity.LinearVelocity, out compensation);
                 //player.entity.Position += new BEPUutilities.Vector3(p.X, p.Y, p.Z);
                 //player.entity.LinearVelocity = BEPUutilities.Vector3.Zero;
-                player.entity.LinearVelocity += new BEPUutilities.Vector3(p.X, p.Y, p.Z);
+                player.entity.LinearVelocity += compensation;
+                BEPUutilities.Vector3 q = player.entity.Position;
+                Subject.cameraPos = new Vector3(q.X, q.Y, q.Z);
             }
             /*if (player != null)
             {
@@ -146,6 +151,7 @@ namespace Wireframe_space.NetCode
                 }
             }*/
         }
+
         private void PositionUpdate()
         {
             while (true)
@@ -161,10 +167,16 @@ namespace Wireframe_space.NetCode
                 }
             }
         }
+
         public void Draw()
         {
+            SpriteBatch sb = manager.game.Services.GetService<SpriteBatch>();
 
+            sb.Begin();
+            sb.DrawString(manager.font, player.entity.LinearVelocity.ToString(), new Vector2(0, 0), Color.White);
+            sb.End();
         }
+
         public void DealDamage(float[] command)
         {
 
