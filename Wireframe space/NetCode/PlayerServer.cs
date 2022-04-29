@@ -1,4 +1,7 @@
-﻿using BEPUphysics.Entities.Prefabs;
+﻿using BEPUphysics.BroadPhaseEntries;
+using BEPUphysics.BroadPhaseEntries.MobileCollidables;
+using BEPUphysics.Entities.Prefabs;
+using BEPUphysics.NarrowPhaseSystems.Pairs;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -39,12 +42,15 @@ namespace Wireframe_space.NetCode
             control = new PlayerControl(manager);
 
             playerId = manager.id = manager.FindFreeId();
-            float[] cmd = new float[13] { 0, playerId, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
-            manager.commands.Add(cmd);
+            Quaternion q = Quaternion.Identity;
+            float[] cmd = new float[13] { 0, playerId, 0, 0, 0, q.X, q.Y, q.Z, q.W, 0, 0, 0, 1 };   //create player
+            //manager.commands.Add(cmd);
+            CreateObj(cmd);
         }
 
         public void CreateObj(float[] cmd)
         {
+            //0 - commandID, 1 - objID, 2-4 - pos, 5-8 - quaternion, 9-11 - speed, 12 - obj type
             BEPUutilities.Vector3 pos = new BEPUutilities.Vector3(cmd[2], cmd[3], cmd[4]);
             Vector3 posv = new Vector3(cmd[2], cmd[3], cmd[4]);
             BEPUutilities.Quaternion quaternion = new BEPUutilities.Quaternion(cmd[5], cmd[6], cmd[7], cmd[8]);
@@ -52,27 +58,35 @@ namespace Wireframe_space.NetCode
             Vector3 speedv = new Vector3(cmd[9], cmd[10], cmd[11]);
 
             Subject s;
-            if (cmd[1] != playerId)
-            {
-                s = new Subject((int)cmd[1], (int)cmd[12], "asteroid", manager.game);
-                Box box = new Box(BEPUutilities.Vector3.Zero, 1, 1, 1, 1);
-                manager.space.Add(box);
-                s.SetModel(points, lines, box);
+            Box box = new Box(BEPUutilities.Vector3.Zero, 1, 1, 1, 1);
+            manager.space.Add(box);
 
-                box.Position = pos;
-                box.Orientation = quaternion;
+            box.Position = pos;
+            box.Orientation = quaternion;
+            box.LinearVelocity = speed;
+
+            if (cmd[1] == playerId)
+            {
+                s = player = new Subject((int)cmd[1], 1, "player", manager.game);
+                player.SetModel(points, lines, box);
+                player.hp = 3;
+
+                box.Position = new BEPUutilities.Vector3(-5, -3, -10);
+                box.Orientation = BEPUutilities.Quaternion.Identity;
                 box.LinearVelocity = speed;
+            }
+            else if(cmd[12] == 2)
+            {
+                s = new Subject((int)cmd[1], 2, "bullet", manager.game);
+                s.SetModel(points, lines, box);
+                box.Mass = 0.01f;
+                box.CollisionInformation.Events.InitialCollisionDetected += BulletHit;
+                s.Destroy(3000);
             }
             else
             {
-                Box box = new Box(BEPUutilities.Vector3.Zero, 1, 1, 1, 1);
-                manager.space.Add(box);
-                s = player = new Subject((int)cmd[1], 1, "player", manager.game);
-                player.SetModel(points, lines, box);
-
-                box.Position = new BEPUutilities.Vector3(-5, -3, -10);
-                //box.Orientation = quaternion;
-                //box.LinearVelocity = speed;
+                s = new Subject((int)cmd[1], (int)cmd[12], "asteroid", manager.game);
+                s.SetModel(points, lines, box);
             }
 
             manager.subjects.Add(s);
@@ -83,8 +97,22 @@ namespace Wireframe_space.NetCode
 
         public void DestroyObj(float[] cmd)
         {
-            manager.space.Remove(manager.space.Entities[(int)cmd[1]]);
-            manager.subjects.RemoveAt((int)cmd[1]);
+            //0 - command number, 1 - serial number in array, 2 - id (check)
+
+            //manager.space.Remove(manager.space.Entities[(int)cmd[1]]);
+            //manager.subjects.RemoveAt((int)cmd[1]);
+
+            if (manager.subjects[(int)cmd[1]].id == (int)cmd[2])
+                manager.subjects[(int)cmd[1]].Destroy();
+            else
+            {
+                for (int i = 0; i < manager.subjects.Count; i++)
+                    if (manager.subjects[i].id == (int)cmd[2])
+                    {
+                        manager.subjects[i].Destroy();
+                        i = manager.subjects.Count;
+                    }
+            }
 
             server.DestroyObj((int)cmd[1], (int)cmd[2]);
 
@@ -93,20 +121,23 @@ namespace Wireframe_space.NetCode
 
         public void Update(GameTime gameTime)
         {
-            if (player != null && manager.game.IsActive)
+
+            if (player != null)    //update player speed
             {
                 Vector3 p = control.Update(gameTime, player.entity.LinearVelocity, out compensation);
-                //player.entity.Position += new BEPUutilities.Vector3(p.X, p.Y, p.Z);
-                //player.entity.LinearVelocity = BEPUutilities.Vector3.Zero;
-                player.entity.LinearVelocity += compensation;
-                player.entity.LinearVelocity += new BEPUutilities.Vector3(p.X, p.Y, p.Z);
+                if (manager.game.IsActive)
+                {
+                    player.entity.LinearVelocity += compensation;
+                    player.entity.LinearVelocity += new BEPUutilities.Vector3(p.X, p.Y, p.Z);
+                }
                 BEPUutilities.Vector3 q = player.entity.Position;
-                Subject.cameraPos = new Vector3(q.X, q.Y, q.Z);
+                Subject.cameraPos = new Vector3(q.X, q.Y, q.Z); //update camera pos
             }
-            for (int i = 0; i < manager.subjects.Count; i++)
+            for (int i = 0; i < manager.subjects.Count; i++)    //debug 25 cubes
             {
-                if (manager.subjects[i].type != 1)
-                    manager.subjects[i].entity.LinearVelocity = new BEPUutilities.Vector3(-0.1f * i, 0, 0);
+                //if (manager.subjects[i].type != 1)
+                //manager.subjects[i].entity.LinearVelocity = new BEPUutilities.Vector3(-0.1f * i, 0, 0);
+                //manager.subjects[i].entity.LinearVelocity = new BEPUutilities.Vector3(0, 0, 0);
             }
         }
 
@@ -123,8 +154,95 @@ namespace Wireframe_space.NetCode
             sb.End();
         }
 
-        public void DealDamage(float[] command)
+        public void DealDamage(float[] cmd)
         {
+            //0 - cmd type, 1 - id, 2 - damage
+
+            for (int i = 0; i < manager.subjects.Count; i++)
+            {
+                if (manager.subjects[i].id == cmd[1])
+                {
+                    manager.subjects[i].hp -= (int)cmd[2];
+
+                    //if hp <= 0
+                    if (manager.subjects[i].hp <= 0)
+                    {
+                        //destroy
+                        //manager.commands.Add(new float[3] { 1, i, cmd[1] });
+                        DestroyObj(new float[3] { 1, i, cmd[1] });
+                        //manager.subjects[i].Destroy();
+                    }
+                    i = manager.subjects.Count;
+                }
+            }
+
+            /*if (manager.subjects[(int)cmd[1]].hp <= 0)
+                for (int i = 0; i < manager.subjects.Count; i++)
+                    if (manager.subjects[i].id == cmd[1])
+                    {
+                        //destroy
+                        manager.commands.Add(new float[3] { 1, i, cmd[1] });
+                        manager.subjects[i].Destroy();
+                    }
+            */
+            manager.server.DealDamage((int)cmd[1], (int)cmd[2]);
+            manager.commands.Remove(cmd);
+        }
+        private void BulletHit(EntityCollidable sender, Collidable other, CollidablePairHandler pair)
+        {
+            /*int senderId = manager.space.Entities.IndexOf(sender.Entity);
+            int otherId;
+            if (sender.Entity != pair.EntityB)
+                otherId = manager.space.Entities.IndexOf(pair.EntityB);
+            else
+                otherId = manager.space.Entities.IndexOf(pair.EntityA);*/
+
+            int serialNum1 = -1;    //bullet
+            for (int i = 0; i < manager.subjects.Count; i++)
+            {
+                if (manager.subjects[i].entity == pair.EntityA)
+                    serialNum1 = i;
+            }
+            //int serialNum2 = manager.space.Entities.IndexOf(pair.EntityB);
+            int serialNum2 = -1;    //collide
+            for(int i = 0; i < manager.subjects.Count; i++)
+            {
+                if (manager.subjects[i].entity == pair.EntityB)
+                    serialNum2 = i;
+            }
+            int id1 = -1, id2 = -1;
+            if (serialNum1 != -1)
+                id1 = manager.subjects[serialNum1].id;
+            if (serialNum2 != -1)
+                id2 = manager.subjects[serialNum2].id;
+
+            if (id2 >= 10000)
+            {
+                int t = serialNum1;
+                serialNum1 = serialNum2;
+                serialNum2 = t;
+
+                t = id1;
+                id1 = id2;
+                id2 = t;
+            }
+
+            int senderId = id1, otherId = id2;
+            if (serialNum1 != -1)
+            {
+                manager.subjects[serialNum1].Destroy();
+
+                if (serialNum2 != -1)
+                {
+                    if (senderId / 10000 == playerId)
+                    {
+                        float[] cmd = new float[] { 2, otherId, 1 };
+                        //0 - cmd type, 1 - id, 2 - damage
+                        //manager.commands.Add(cmd);
+                        DealDamage(cmd);
+                    }
+                }
+            }
 
         }
     }

@@ -120,7 +120,7 @@ namespace Wireframe_space
                 Top = (int)(screenHeight * 0.635f - screenHeight * 0.12f),
                 Width = (int)(screenWidth * 0.2f),
                 Height = (int)(screenHeight * 0.1f),
-                Text = "Save"
+                Text = "Подключение"
             };
             desktop.Widgets.Add(button1);
             TextButton button2 = new TextButton
@@ -129,7 +129,7 @@ namespace Wireframe_space
                 Top = (int)(screenHeight * 0.635f),
                 Width = (int)(screenWidth * 0.2f + screenWidth * 0.02f),
                 Height = (int)(screenHeight * 0.1f),
-                Text = "Save"
+                Text = "Создать игру"
             };
             desktop.Widgets.Add(button2);
             TextButton button3 = new TextButton
@@ -138,7 +138,7 @@ namespace Wireframe_space
                 Top = (int)(screenHeight * 0.635f + screenHeight * 0.12f),
                 Width = (int)(screenWidth * 0.2f + screenWidth * 0.04f),
                 Height = (int)(screenHeight * 0.1f),
-                Text = "Save"
+                Text = "Не работает"
             };
             desktop.Widgets.Add(button3);
             TextButton button4 = new TextButton
@@ -147,7 +147,7 @@ namespace Wireframe_space
                 Top = (int)(screenHeight * 0.635f + screenHeight * 0.24f),
                 Width = (int)(screenWidth * 0.2f + screenWidth * 0.06f),
                 Height = (int)(screenHeight * 0.1f),
-                Text = "Save"
+                Text = "Не работает"
             };
             desktop.Widgets.Add(button4);
             //button.Visible = false;

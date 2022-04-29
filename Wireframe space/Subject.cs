@@ -1,17 +1,21 @@
 ﻿using BEPUphysics.Entities;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Wireframe_space
 {
     class Subject
     {
         //player settings
+        public int hp = 1;
         public string name;
         public int id;
         public int type;    // 0 - environment, 1 - player, 2 - bullet
+        public bool isActive = true;
         Game game;
-        
+
         //Default model
         private VertexPositionColor[] points = new VertexPositionColor[8]
         {
@@ -37,7 +41,7 @@ namespace Wireframe_space
         public Vector3 pos;
         public Vector4 color;
         public static Matrix orientation = Matrix.Identity;
-        public Vector3 quaternion;
+        public Vector4 quaternion;
 
         //camera settings
         public static Vector3 rot = Vector3.Zero;
@@ -60,20 +64,30 @@ namespace Wireframe_space
         }
         public void Draw()
         {
-            Vector3 pos = this.pos;
-            if (entity != null)
+            if (isActive)
             {
-                BEPUutilities.Vector3 p = entity.Position;
-                pos = new Vector3(p.X, p.Y, p.Z);
+                Vector3 pos = this.pos;
+                if (entity != null)
+                {
+                    BEPUutilities.Vector3 p = entity.Position;
+                    pos = new Vector3(p.X, p.Y, p.Z);
+                }
+
+                basicEffect.Parameters[1].SetValue(Matrix.Identity);
+                basicEffect.Parameters[2].SetValue(orientation);
+                basicEffect.Parameters[3].SetValue(cameraPos - pos);
+                if (type == 0)
+                    basicEffect.Parameters[4].SetValue(new Vector4(1, 1, 1, 1));
+                else if (type == 1)
+                    basicEffect.Parameters[4].SetValue(new Vector4(0, 1, 0, 1));
+                else if (type == 2)
+                    basicEffect.Parameters[4].SetValue(new Vector4(1, 0.8f, 0, 1));
+                else if (type == 3)
+                    basicEffect.Parameters[4].SetValue(new Vector4(1, 0, 0, 1));
+                basicEffect.CurrentTechnique.Passes[0].Apply();
+
+                game.GraphicsDevice.DrawUserIndexedPrimitives(PrimitiveType.LineList, points, 0, points.Length, lines, 0, lines.Length / 2);
             }
-
-            basicEffect.Parameters[1].SetValue(Matrix.Identity);
-            basicEffect.Parameters[2].SetValue(orientation);
-            basicEffect.Parameters[3].SetValue(cameraPos - pos);
-            basicEffect.Parameters[4].SetValue(new Vector4(1, 1, 1, 1));
-            basicEffect.CurrentTechnique.Passes[0].Apply();
-
-            game.GraphicsDevice.DrawUserIndexedPrimitives(PrimitiveType.LineList, points, 0, points.Length, lines, 0, lines.Length / 2);
         }
         public void SetPosition(Vector3 newPos)
         {
@@ -82,6 +96,36 @@ namespace Wireframe_space
             pos = newPos;
             entity.LinearVelocity = speed * 10;
             //entity.LinearVelocity = BEPUutilities.Vector3.Zero;
+        }
+        public void Destroy()
+        {
+            if (entity != null)
+            {
+                MultiplayerManager.manager.space.Remove(entity);
+            }
+            MultiplayerManager.manager.idCollection.Remove(id);
+            MultiplayerManager.manager.subjects.Remove(this);
+
+            isActive = false;
+        }
+        public void Destroy(int time)
+        {
+            Task t = new Task(() =>
+            {
+                Thread.Sleep(time);
+                if (isActive)
+                {
+                    if (entity != null)
+                    {
+                        MultiplayerManager.manager.space.Remove(entity);
+                    }
+                    MultiplayerManager.manager.idCollection.Remove(id);
+                    MultiplayerManager.manager.subjects.Remove(this);
+
+                    isActive = false;
+                }
+            });
+            t.Start();
         }
     }
 }

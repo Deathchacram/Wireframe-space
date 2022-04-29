@@ -4,6 +4,7 @@ using System;
 using System.IO;
 using System.Net.Sockets;
 using System.Runtime.Serialization.Formatters.Binary;
+using System.Threading;
 
 namespace Wireframe_space
 {
@@ -34,7 +35,7 @@ namespace Wireframe_space
                         Quaternion q = new Quaternion(obj.Orientation.X, obj.Orientation.Y, obj.Orientation.Z, obj.Orientation.W);
 
                         //NetData data = new NetData(p, q);
-                        data = new float[13] { 0, i, p.X, p.Y, p.Z, q.X, q.Y, q.Z, q.W, 0, 0, 0, manager.subjects[i].type };
+                        data = new float[13] { 0, manager.subjects[i].id, p.X, p.Y, p.Z, q.X, q.Y, q.Z, q.W, 0, 0, 0, manager.subjects[i].type };
                     }
                     else
                     {
@@ -42,7 +43,7 @@ namespace Wireframe_space
                         Quaternion q = Quaternion.Identity;
 
                         //NetData data = new NetData(p, q);
-                        data = new float[13] { 0, i, p.X, p.Y, p.Z, q.X, q.Y, q.Z, q.W, 0, 0, 0, manager.subjects[i].type };
+                        data = new float[13] { 0, manager.subjects[i].id, p.X, p.Y, p.Z, q.X, q.Y, q.Z, q.W, 0, 0, 0, manager.subjects[i].type };
                     }
 
                     var bf = new BinaryFormatter();
@@ -78,12 +79,15 @@ namespace Wireframe_space
                     ms = new MemoryStream(bytes);
                     float[] data = bf.Deserialize(ms) as float[];
 
-                    if (data[0] != 0.5f)
+                    //command 0, 1, 2...
+                    if (data[0] != 0.5f)          
                         manager.commands.Add(data);
+                    //send free id
                     else
                     {
                         int id = manager.FindFreeId();
-                        manager.playersId.Add(id);
+                        //add
+                        //manager.players.Add(id, this);
                         data = new float[2] { 0.5f, id };
                         bf = new BinaryFormatter();
                         ms = new MemoryStream();
@@ -104,7 +108,7 @@ namespace Wireframe_space
             {
                 client.Shutdown(SocketShutdown.Both);
                 client.Close();
-                server.DisconnectUser(client);
+                server.DisconnectUser(client, this);
             }
         }
         public void SendCommand(byte[] cmd)

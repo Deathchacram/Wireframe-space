@@ -8,6 +8,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Threading;
 using System.Threading.Tasks;
 using Vector3 = Microsoft.Xna.Framework.Vector3;
+using Vector4 = Microsoft.Xna.Framework.Vector4;
 
 namespace Wireframe_space
 {
@@ -171,17 +172,23 @@ namespace Wireframe_space
                                 if (manager.subjects[i + l] != null)
                                 {
                                     Vector3 p;
-                                    if (manager.subjects[i + l].entity != null)
+                                    if (manager.subjects[i + l].type != 2)  //dont update bullet pos
                                     {
-                                        BEPUutilities.Vector3 ePos = manager.subjects[i + l].entity.Position;
-                                        p = new Vector3(ePos.X, ePos.Y, ePos.Z);
+                                        if (manager.subjects[i + l].entity != null)
+                                        {
+                                            BEPUutilities.Vector3 ePos = manager.subjects[i + l].entity.Position;
+                                            p = new Vector3(ePos.X, ePos.Y, ePos.Z);
+                                        }
+                                        else
+                                            p = manager.subjects[i + l].pos;
+
+                                        Vector4 q = manager.subjects[i + l].quaternion;
+
+                                        //0 - serial number in array, 1 - objID, 2-4 - pos, 5-8 - quaternion
+                                        data[i] = new float[9] { i + l, manager.subjects[i + l].id, p.X, p.Y, p.Z, q.X, q.Y, q.Z, q.W };
                                     }
                                     else
-                                        p = manager.subjects[i + l].pos;
-
-                                    Vector3 q = manager.subjects[i + l].quaternion;
-
-                                    data[i] = new float[7] { p.X, p.Y, p.Z, q.X, q.Y, q.Z, i + l };
+                                        data[i] = new float[9] { -1, -1, 0, 0, 0, 0, 0, 0, 0 };
                                 }
                         }
                         var bf = new BinaryFormatter();
@@ -192,8 +199,12 @@ namespace Wireframe_space
                         foreach (IPAddress ipa in ipadr)
                         {
                             IPEndPoint endPoint = new IPEndPoint(ipa, 26387);
-                            endPoint.Port = 26387;
-                            udp.SendTo(msg, endPoint);
+                            for (int i = 26387; i < 26390; i++)
+                            {
+                                //endPoint.Port = 26387;
+                                endPoint.Port = i;
+                                udp.SendTo(msg, endPoint);
+                            }
                         }
                     }
                 }
@@ -233,7 +244,7 @@ namespace Wireframe_space
                             MemoryStream ms = new MemoryStream(data);
                             float[] getData = bf.Deserialize(ms) as float[];
 
-                            //0 - serial number in array, 1 - objID, 2-4 - pos, 5-7 - quaternion
+                            //0 - serial number in array, 1 - objID, 2-4 - pos, 5-8 - quaternion
                             if (manager.subjects[(int)getData[0]].id == getData[1])
                             {
                                 //manager.subjects[(int)getData[0]].pos = new Vector3(getData[2], getData[3], getData[4]);
@@ -260,9 +271,10 @@ namespace Wireframe_space
             catch { }
         }
 
-        public void DisconnectUser(Socket s)
+        public void DisconnectUser(Socket s, ClientObject c)
         {
             users.Remove(s);
+            clients.Remove(c);
         }
 
         public void CreateObj(int id, Vector3 pos, Quaternion oreintation, Vector3 speed, int type)
@@ -286,8 +298,25 @@ namespace Wireframe_space
         {
             try
             {
-                ///0 - commandID, 1 - objID, 2-4 - pos, 5-8 - quaternion, 9-11 - speed
+                ///0 - commandID, 1 - serial number in array, 2 - id
                 float[] data = new float[3] { 1, serialNumber, id };
+                var bf = new BinaryFormatter();
+                MemoryStream ms = new MemoryStream();
+                bf.Serialize(ms, data);
+                byte[] msg = ms.ToArray();
+
+                foreach (ClientObject client in clients)
+                    client.SendCommand(msg);
+                //serverTcp.Send(msg);
+            }
+            catch { }
+        }
+        public void DealDamage(int id, int damage)
+        {
+            try
+            {
+                ///0 - commandID, 1 - id, 2 - damage
+                float[] data = new float[3] { 2, id, damage };
                 var bf = new BinaryFormatter();
                 MemoryStream ms = new MemoryStream();
                 bf.Serialize(ms, data);

@@ -1,10 +1,10 @@
 ﻿using BEPUphysics;
-using BEPUphysics.Entities.Prefabs;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Mono.Nat;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Wireframe_space.NetCode;
 using Matrix = Microsoft.Xna.Framework.Matrix;
@@ -14,27 +14,32 @@ namespace Wireframe_space
 {
     class MultiplayerManager : DrawableGameComponent
     {
+        //global
         public static MultiplayerManager manager;
+        public Space space;
 
         public List<float[]> commands = new List<float[]>();
         public List<Subject> subjects = new List<Subject>();
-        public List<int> playersId = new List<int>();
+        public Dictionary<int, ClientObject> players = new Dictionary<int, ClientObject>();
+        public List<int> idCollection = new List<int>();
+
+        //player
         public int id = -1;
         public bool isServer;
-        public Space space;
         public Client client;
         public Server server;
         public Subject playerSubject;
+        public static IPlayer player;
 
-        private INatDevice device;
         //debug
         public string s = "";
         int counter = 0;
 
+        //other
+        //private INatDevice device;
         public Game game;
-        Effect basicEffect;
-        IPlayer player;
         public SpriteFont font;
+        Effect basicEffect;
 
         VertexPositionColor[] points = new VertexPositionColor[8]
         {
@@ -61,9 +66,9 @@ namespace Wireframe_space
         }
         protected override void LoadContent()
         {
-            NatUtility.DeviceFound += DeviceFound;
+            //NatUtility.DeviceFound += DeviceFound;
             //NatUtility.DeviceLost += DeviceLost;
-            NatUtility.StartDiscovery();
+            //NatUtility.StartDiscovery();
 
             Subject.basicEffect = game.Content.Load<Effect>("BaseEffect");
             Subject.basicEffect.Parameters[0].SetValue(Matrix.CreatePerspectiveFieldOfView(3.14f / 3, 1.6667f, 0.1f, 300));
@@ -75,13 +80,18 @@ namespace Wireframe_space
             {
                 for (int i = 0; i < 25; i++)
                 {
-                    Box box = new Box(BEPUutilities.Vector3.Zero, 1, 1, 1, 1);
+                    int freeId = FindFreeId();
+                    Quaternion q = Quaternion.Identity;
+                    float[] cmd = new float[13] { 0, freeId, 3, 0, i * 2, q.X, q.Y, q.Z, q.W, 0, 0, 0, 0 };   //create player
+                    commands.Add(cmd);
+
+                    /*Box box = new Box(BEPUutilities.Vector3.Zero, 1, 1, 1, 1);
                     box.Position = new BEPUutilities.Vector3(3, 0, i);
                     space.Add(box);
 
                     Subject s = new Subject(i, 0, "asteroid", game);
                     s.SetModel(points, lines, box);
-                    subjects.Add(s);
+                    subjects.Add(s);*/
                 }
 
                 server = new Server(this);
@@ -129,6 +139,9 @@ namespace Wireframe_space
                     case 1:
                         player.DestroyObj(commands[0]);
                         break;
+                    case 2:
+                        player.DealDamage(commands[0]);
+                        break;
                     case 0.5f:
                         PlayerClient pl = player as PlayerClient;
                         pl.playerId = (int)commands[0][1];
@@ -146,12 +159,17 @@ namespace Wireframe_space
 
             player.Draw();
             SpriteBatch sb = game.Services.GetService<SpriteBatch>();
+            sb.Begin();
+            sb.DrawString(font, "O", new Vector2(395, 235), Color.White);
+            sb.DrawString(font, subjects.Count + " " + space.Entities.Count, new Vector2(0, 60), Color.White);
+            sb.End();
             if (isServer)
             {
                 sb.Begin();
                 //sb.DrawString(font, server.users.Count.ToString(), new Vector2(0, 0), Color.White);
                 //sb.DrawString(font, space.Entities.Count.ToString(), new Vector2(0, 20), Color.White);
-                sb.DrawString(font, "O", new Vector2(395, 235), Color.White);
+                //sb.DrawString(font, "O", new Vector2(395, 235), Color.White);
+                //sb.DrawString(font, v.ToString(), new Vector2(395, 235), Color.White);
                 //sb.DrawString(font, s, new Vector2(0, 40), Color.White);
                 sb.End();
 
@@ -173,7 +191,18 @@ namespace Wireframe_space
             else
             {
                 sb.Begin();
-                sb.DrawString(font, commands.Count.ToString() + s, new Vector2(0, 40), Color.White);
+                sb.DrawString(font, commands.Count.ToString() + s, new Vector2(0, 20), Color.White);
+                string a = "";
+                for(int i = 0; i < subjects.Count; i += 10)
+                {
+                    for(int l = 0; l < 7; l++)
+                    {
+                        if(i + l < subjects.Count)
+                        a += "id:" + subjects[i + l].id + "pos:" + subjects[i + l].entity.Position.ToString();
+                    }
+                    a += '\n';
+                }
+                sb.DrawString(font, a, new Vector2(0, 40), Color.White);
                 sb.End();
                 for (int i = 0; i < subjects.Count; i++)
                 {
@@ -192,42 +221,52 @@ namespace Wireframe_space
         }
         public int FindFreeId()
         {
-            for (int i = 0; i < subjects.Count; i++)
-                if (subjects[i].id != i)
+            
+            for (int i = 0; i < idCollection.Count; i++)
+                if (idCollection.IndexOf(i) == -1)
+                {
+                    idCollection.Add(i);
                     return i;
+                }
 
-            return subjects.Count;
+            idCollection.Add(idCollection.Count);
+            return idCollection.Count - 1;
         }
 
-        private async void DeviceFound(object sender, DeviceEventArgs args)
+        /*private async void DeviceFound(object sender, DeviceEventArgs args)
         {
             device = args.Device;
 
-
             if (isServer)
             {
-                //if (device.GetSpecificMapping(Protocol.Tcp, 26386).PublicPort == -1)
                 device.CreatePortMap(new Mapping(Protocol.Tcp, 26386, 26386, 0, "tcp1"));
 
-                //if (device.GetSpecificMapping(Protocol.Udp, 26388).PublicPort == -1)
                 device.CreatePortMap(new Mapping(Protocol.Udp, 26388, 26388, 0, "udp2"));
             }
-            //else if (device.GetSpecificMapping(Protocol.Udp, 26387).PublicPort == -1)
             else
                 device.CreatePortMap(new Mapping(Protocol.Udp, 26387, 26387, 0, "udp1"));
 
-            /*if (isServer)
+            *//*bool flag;
+            var mappings = await device.GetAllMappingsAsync();
+            for(int i = 26387; i < 26390; i++)
             {
-                device.DeletePortMap(new Mapping(Protocol.Tcp, 26386, 26386, 0, "tcp1"));
-                device.DeletePortMap(new Mapping(Protocol.Udp, 26388, 26388, 0, "udp2"));
-            }
-            else
-                device.DeletePortMap(new Mapping(Protocol.Udp, 26387, 26387, 0, "udp1"));*/
+                flag = true;
+                foreach(var mapping in mappings)
+                {
+                    if(mapping.PublicPort == i)
+                    {
+                        flag = false;
+                    }
+                }
+                if (flag)
+                {
+                    device.CreatePortMap(new Mapping(Protocol.Udp, i, i, 0, "udp1"));
+                    i = 26390;
+                }
+            }*/
 
-            //var mappings = await device.GetAllMappingsAsync();
-            //int i = 0;
             /*foreach (Mapping portMap in device.GetAllMappings())
-                s += '\n' + portMap.ToString();*/
+                s += '\n' + portMap.ToString();*//*
 
             //ipadr = device.GetExternalIP();
         }
@@ -238,7 +277,7 @@ namespace Wireframe_space
 
             //if (device.GetSpecificMapping(Protocol.Tcp, 26386).PublicPort > -1)
             //    device.DeletePortMap(new Mapping(Protocol.Tcp, 26386, 26386));
-        }
+        }*/
     }
     interface IPlayer
     {

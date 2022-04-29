@@ -4,7 +4,6 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.Serialization.Formatters.Binary;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Wireframe_space
@@ -28,7 +27,7 @@ namespace Wireframe_space
         {
             this.manager = manager;
         }
-        
+
         public void Connect()
         {
             try
@@ -113,7 +112,7 @@ namespace Wireframe_space
 
                 while (true)
                 {
-                    byte[] data = new byte[512]; // буфер для ответа
+                    byte[] data = new byte[1024]; //answer buffer
                     EndPoint remoteIp = new IPEndPoint(IPAddress.Any, 0);
 
                     do
@@ -124,19 +123,30 @@ namespace Wireframe_space
                             var bf = new BinaryFormatter();
                             MemoryStream ms = new MemoryStream(data);
                             float[][] getData = bf.Deserialize(ms) as float[][];
+
+                            //0 - serial number in array, 1 - objID, 2-4 - pos, 5-8 - quaternion
                             for (int i = 0; i < 10; i++)
                             {
                                 if (getData[i] != null)
                                 {
-                                    if (manager.subjects.Count > getData[i][6] && getData[i][6] != manager.id)
+                                    if (manager.subjects.Count > getData[i][0] && getData[i][1] != manager.id && getData[i][1] != -1)
                                     {
-                                        Vector3 pos = new Vector3(getData[i][0], getData[i][1], getData[i][2]);
-                                        manager.subjects[(int)getData[i][6]].SetPosition(pos);
+                                        Vector3 pos = new Vector3(getData[i][2], getData[i][3], getData[i][4]);
+
+                                        if (manager.subjects[(int)getData[i][0]].id == (int)getData[i][1])
+                                            manager.subjects[(int)getData[i][0]].SetPosition(pos);
+                                        else
+                                            for (int l = 0; l < manager.subjects.Count; l++)
+                                                if (manager.subjects[l].id == (int)getData[i][1])
+                                                    manager.subjects[l].SetPosition(pos);
                                     }
                                 }
                             }
                         }
-                        catch { }
+                        catch(Exception ex) 
+                        {
+                            string s = ex.Source;
+                        }
                     }
                     while (serverUdp.Available > 0);
 
@@ -149,9 +159,10 @@ namespace Wireframe_space
         {
             try
             {
-                ///0 - commandID, 1 - objID, 2-4 - pos, 5-8 - quaternion, 9-11 - speed, 12 - obj type
+                //0 - commandID, 1 - objID, 2-4 - pos, 5-8 - quaternion, 9-11 - speed, 12 - obj type, 13 - obj model id
                 float[] data = new float[13] { 0, id, pos.X, pos.Y, pos.Z, oreintation.X, oreintation.Y, oreintation.Z, oreintation.W, speed.X, speed.Y, speed.Z, type };
-                var bf = new BinaryFormatter();
+                SendTcp(data);
+                /*var bf = new BinaryFormatter();
                 MemoryStream ms = new MemoryStream();
                 bf.Serialize(ms, data);
                 byte[] msg = ms.ToArray();
@@ -162,7 +173,17 @@ namespace Wireframe_space
                 byte[] msgLenght = ms.ToArray();
 
                 serverTcp.Send(msgLenght);
-                serverTcp.Send(msg);
+                serverTcp.Send(msg);*/
+            }
+            catch { }
+        }
+        public void DealDamage(int id, int damage)
+        {
+            try
+            {
+                //0 - cmd type, 1 - id, 2 - damage
+                float[] data = new float[3] { 2, id, damage };
+                SendTcp(data);
             }
             catch { }
         }
