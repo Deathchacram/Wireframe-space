@@ -67,7 +67,8 @@ namespace Wireframe_space
 
         private void ConnectToServer()
         {
-            MultiplayerManager mManager = new MultiplayerManager(game);
+            TextBox tb = (TextBox)desktop.Widgets[4];
+            MultiplayerManager mManager = new MultiplayerManager(game, tb.Text);
             mManager.isServer = false;
             game.Components.Add(mManager);
             game.Components.Remove(this);

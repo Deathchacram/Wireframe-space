@@ -1,5 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using System;
 
 namespace Wireframe_space
 {
@@ -7,7 +8,7 @@ namespace Wireframe_space
     {
         MultiplayerManager manager;
         Game game;
-        Subject player;
+        public Subject player;
         public static int bulletId = 0;
 
         /*Point mouseRot = new Point(0, 0);
@@ -19,9 +20,10 @@ namespace Wireframe_space
         private float horizontalAngle = 0, verticalAngle = 0, milisec = 0;*/
         private bool flag = true, flag2 = false, inertiaCompensation = true;
 
-        public PlayerControl(MultiplayerManager manager)
+        public PlayerControl(MultiplayerManager manager, Subject player)
         {
             this.manager = manager;
+            this.player = player;   
             game = manager.game;
         }
 
@@ -115,30 +117,35 @@ namespace Wireframe_space
                 delta.Z = deltaPos.X * m.M13 + deltaPos.Y * m.M23 + deltaPos.Z * m.M33 + m.M43;
 
                 float deltaTimeSpeed = (float)(1f / gameTime.ElapsedGameTime.TotalMilliseconds);
-                //X
-                if (velocity.X > deltaTimeSpeed)
-                    compensation.X += (delta.X - deltaTimeSpeed);
-                else if (velocity.X < -deltaTimeSpeed)
-                    compensation.X += (delta.X + deltaTimeSpeed);
-                //else
-                //    compensation.X = -velocity.X;
 
-                //Y
-                if (velocity.Y > deltaTimeSpeed)    //Y
-                    compensation.Y += (delta.Y - deltaTimeSpeed);
-                else if (velocity.Y < -deltaTimeSpeed)
-                    compensation.Y += (delta.Y + deltaTimeSpeed);
-                //else
-                //    compensation.Y = -velocity.Y;
+                if (velocity != BEPUutilities.Vector3.Zero && delta != Vector3.Zero)
+                {
+                    Vector3 vel = new Vector3(velocity.X, velocity.Y, velocity.Z);
+                    Vector3 comDir = Vector3.Normalize(delta) - Vector3.Normalize(vel);
+                    comDir.Normalize();
+                    comDir *= deltaTimeSpeed;
+                    compensation = new BEPUutilities.Vector3(comDir.X, comDir.Y, comDir.Z) / 2;
+                }
+                else
+                {
+                    //X
+                    if (velocity.X > deltaTimeSpeed)
+                        compensation.X += (delta.X - deltaTimeSpeed);
+                    else if (velocity.X < -deltaTimeSpeed)
+                        compensation.X += (delta.X + deltaTimeSpeed);
 
-                //Z
-                if (velocity.Z > deltaTimeSpeed)
-                    compensation.Z += (delta.Z - deltaTimeSpeed);
-                else if (velocity.Z < -deltaTimeSpeed)
-                    compensation.Z += (delta.Z + deltaTimeSpeed);
-                //else
-                //    compensation.Z = velocity.Z;
+                    //Y
+                    if (velocity.Y > deltaTimeSpeed)
+                        compensation.Y += (delta.Y - deltaTimeSpeed);
+                    else if (velocity.Y < -deltaTimeSpeed)
+                        compensation.Y += (delta.Y + deltaTimeSpeed);
 
+                    //Z
+                    if (velocity.Z > deltaTimeSpeed)
+                        compensation.Z += (delta.Z - deltaTimeSpeed);
+                    else if (velocity.Z < -deltaTimeSpeed)
+                        compensation.Z += (delta.Z + deltaTimeSpeed);
+                }
                 //cameraPos += delta * 3;
                 //direction += delta;
 
@@ -150,7 +157,7 @@ namespace Wireframe_space
                 flag2 = true;
                 Vector3 start = Subject.cameraPos;
                 Vector3 end = ScreenToWorld();
-                Vector3 speed = Vector3.Normalize(end - start) * 25;
+                Vector3 speed = Vector3.Normalize(end - start) * 50 + new Vector3(velocity.X, velocity.Y, velocity.Z);
                 end = (end - start) * 5 + start;
                 Quaternion quat = Quaternion.CreateFromRotationMatrix(Subject.orientation);
                 //0 - commandID, 1 - objID, 2-4 - pos, 5-8 - quaternion, 9-11 - speed, 12 - obj type, 13
@@ -167,6 +174,16 @@ namespace Wireframe_space
             }
             else if (Mouse.GetState().LeftButton != ButtonState.Pressed && flag2)
                 flag2 = false;
+
+
+            if (player != null)
+            {
+                float pov = velocity.Length() / 100;
+                Math.Min(pov, 0.3f);
+                Subject.basicEffect.Parameters[0].SetValue(Matrix.CreatePerspectiveFieldOfView(3.14f / 3 + pov, 1.6667f, 0.1f, 300));
+                Quaternion quat = Quaternion.CreateFromRotationMatrix(Matrix.Invert(Subject.orientation));
+                player.entity.Orientation = new BEPUutilities.Quaternion(quat.X, quat.Y, quat.Z, quat.W);
+            }
 
             return delta;
         }

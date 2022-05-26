@@ -22,6 +22,7 @@ namespace Wireframe_space
         private IPAddress localIp;
         private List<IPAddress> ipadr = new List<IPAddress>();
         private int port = 26386;
+        public int tickrate = 30;
         private Socket udp, sListener;
 
         public Server(MultiplayerManager manager)
@@ -46,7 +47,7 @@ namespace Wireframe_space
         {
             try
             {
-                IPEndPoint ipEndPoint = new IPEndPoint(IPAddress.Any, 26386);
+                IPEndPoint ipEndPoint = new IPEndPoint(IPAddress.Any, port);
                 sListener.Bind(ipEndPoint);
                 sListener.Listen(10);
 
@@ -88,7 +89,7 @@ namespace Wireframe_space
             {
                 while (true)
                 {
-                    Thread.Sleep(100);
+                    Thread.Sleep(1000 / tickrate);
                     /*//Send environment positions
                     for (int l = 0; l < manager.subjects.Count; l += 10)
                     {
@@ -182,7 +183,7 @@ namespace Wireframe_space
                                         else
                                             p = manager.subjects[i + l].pos;
 
-                                        Vector4 q = manager.subjects[i + l].quaternion;
+                                        BEPUutilities.Quaternion q = manager.subjects[i + l].entity.Orientation;
 
                                         //0 - serial number in array, 1 - objID, 2-4 - pos, 5-8 - quaternion
                                         data[i] = new float[9] { i + l, manager.subjects[i + l].id, p.X, p.Y, p.Z, q.X, q.Y, q.Z, q.W };
@@ -198,8 +199,8 @@ namespace Wireframe_space
 
                         foreach (IPAddress ipa in ipadr)
                         {
-                            IPEndPoint endPoint = new IPEndPoint(ipa, 26387);
-                            for (int i = 26387; i < 26390; i++)
+                            IPEndPoint endPoint = new IPEndPoint(ipa, 26388);
+                            for (int i = 26388; i < 26390; i++)
                             {
                                 //endPoint.Port = 26387;
                                 endPoint.Port = i;
@@ -227,7 +228,7 @@ namespace Wireframe_space
         {
             try
             {
-                IPEndPoint localIP = new IPEndPoint(localIp, 26388);
+                IPEndPoint localIP = new IPEndPoint(localIp, port + 1);
                 udp.Bind(localIP);
 
                 while (true)
@@ -245,21 +246,27 @@ namespace Wireframe_space
                             float[] getData = bf.Deserialize(ms) as float[];
 
                             //0 - serial number in array, 1 - objID, 2-4 - pos, 5-8 - quaternion
-                            if (manager.subjects[(int)getData[0]].id == getData[1])
+                            if (getData != null)
                             {
-                                //manager.subjects[(int)getData[0]].pos = new Vector3(getData[2], getData[3], getData[4]);
-                                //manager.subjects[(int)getData[0]].quaternion = new Vector3(getData[5], getData[6], getData[7]);
-                                manager.subjects[(int)getData[0]].SetPosition(new Vector3(getData[2], getData[3], getData[4]));
-                            }
-                            else
-                            {
-                                for (int i = 0; i < manager.subjects.Count; i++)
-                                    if (manager.subjects[i].id == (int)getData[1])
-                                    {
-                                        //manager.subjects[(int)getData[0]].pos = new Vector3(getData[2], getData[3], getData[4]);
-                                        //manager.subjects[(int)getData[0]].quaternion = new Vector3(getData[5], getData[6], getData[7]);
-                                        manager.subjects[(int)getData[0]].SetPosition(new Vector3(getData[2], getData[3], getData[4]));
-                                    }
+                                Vector3 pos = new Vector3(getData[2], getData[3], getData[4]);
+                                Vector4 quat = new Vector4(getData[5], getData[6], getData[7], getData[8]);
+
+                                if (manager.subjects[(int)getData[0]].id == getData[1])
+                                {
+                                    //manager.subjects[(int)getData[0]].pos = new Vector3(getData[2], getData[3], getData[4]);
+                                    //manager.subjects[(int)getData[0]].quaternion = new Vector3(getData[5], getData[6], getData[7]);
+                                    manager.subjects[(int)getData[0]].SetPosition(pos, quat);
+                                }
+                                else
+                                {
+                                    for (int i = 0; i < manager.subjects.Count; i++)
+                                        if (manager.subjects[i].id == (int)getData[1])
+                                        {
+                                            //manager.subjects[(int)getData[0]].pos = new Vector3(getData[2], getData[3], getData[4]);
+                                            //manager.subjects[(int)getData[0]].quaternion = new Vector3(getData[5], getData[6], getData[7]);
+                                            manager.subjects[(int)getData[0]].SetPosition(pos, quat);
+                                        }
+                                }
                             }
                         }
                         catch { }
@@ -275,6 +282,7 @@ namespace Wireframe_space
         {
             users.Remove(s);
             clients.Remove(c);
+            manager.commands.Add(new float[] { 1, 0, c.clientId });
         }
 
         public void CreateObj(int id, Vector3 pos, Quaternion oreintation, Vector3 speed, int type)

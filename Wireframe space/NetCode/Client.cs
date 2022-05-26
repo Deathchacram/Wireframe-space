@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.Serialization.Formatters.Binary;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Wireframe_space
@@ -17,11 +18,12 @@ namespace Wireframe_space
 
         //private IPAddress ipadr = IPAddress.Parse("77.51.211.124");
         //private IPAddress ipadr = IPAddress.Parse("192.168.1.7"); //77.51.211.124
-        private IPAddress ipadr;
-        private int port = 26386;
+        public IPAddress localIp, 
+            serverIp = IPAddress.Parse("176.193.179.34");
+        public IPAddress externalIp = IPAddress.Parse("176.193.179.34");
+        private int port = 26386, localPort = 26388;
         private Socket serverTcp, serverUdp;
         private MultiplayerManager manager;
-
 
         public Client(MultiplayerManager manager)
         {
@@ -37,7 +39,7 @@ namespace Wireframe_space
                     IPEndPoint endPoint;
                     socket.Connect("8.8.8.8", 65530);
                     endPoint = socket.LocalEndPoint as IPEndPoint;
-                    ipadr = endPoint.Address;
+                    localIp = endPoint.Address;
                 }
 
                 Task task1 = new Task(ListenTCP);
@@ -57,16 +59,18 @@ namespace Wireframe_space
 
         private void ListenTCP()    //TCP recive commands
         {
-            IPEndPoint ipEndPoint = new IPEndPoint(IPAddress.Parse("79.111.188.119"), 26386);
+            IPEndPoint ipEndPoint = new IPEndPoint(serverIp, port);
             serverTcp = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             serverTcp.Connect(ipEndPoint);
 
             //send IP to server
             try
             {
+                while (externalIp == null)
+                    Thread.Sleep(50);
                 var bf = new BinaryFormatter();
                 MemoryStream ms = new MemoryStream();
-                bf.Serialize(ms, ipadr.ToString());
+                bf.Serialize(ms, externalIp.ToString());
                 byte[] msg = ms.ToArray();
 
                 ms = new MemoryStream();
@@ -107,7 +111,7 @@ namespace Wireframe_space
             try
             {
                 serverUdp = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-                IPEndPoint localIP = new IPEndPoint(ipadr, 26387);
+                IPEndPoint localIP = new IPEndPoint(localIp, port + 2);
                 serverUdp.Bind(localIP);
 
                 while (true)
@@ -132,13 +136,14 @@ namespace Wireframe_space
                                     if (manager.subjects.Count > getData[i][0] && getData[i][1] != manager.id && getData[i][1] != -1)
                                     {
                                         Vector3 pos = new Vector3(getData[i][2], getData[i][3], getData[i][4]);
+                                        Vector4 quat = new Vector4(getData[i][5], getData[i][6], getData[i][7], getData[i][8]);
 
                                         if (manager.subjects[(int)getData[i][0]].id == (int)getData[i][1])
-                                            manager.subjects[(int)getData[i][0]].SetPosition(pos);
+                                            manager.subjects[(int)getData[i][0]].SetPosition(pos, quat);
                                         else
                                             for (int l = 0; l < manager.subjects.Count; l++)
                                                 if (manager.subjects[l].id == (int)getData[i][1])
-                                                    manager.subjects[l].SetPosition(pos);
+                                                    manager.subjects[l].SetPosition(pos, quat);
                                     }
                                 }
                             }
@@ -210,8 +215,8 @@ namespace Wireframe_space
             bf.Serialize(ms, cmd);
             byte[] msg = ms.ToArray();
 
-            IPEndPoint endPoint = new IPEndPoint(IPAddress.Parse("79.111.188.119"), 26388);
-            endPoint.Port = 26388;
+            IPEndPoint endPoint = new IPEndPoint(serverIp, port + 1);
+            //endPoint.Port = port + 1;
             serverUdp.SendTo(msg, endPoint);
         }
     }

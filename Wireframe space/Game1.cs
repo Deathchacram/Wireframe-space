@@ -5,10 +5,8 @@ using BEPUutilities;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using Myra;
 using Myra.Graphics2D.UI;
 using System;
-using System.Threading;
 using Matrix = Microsoft.Xna.Framework.Matrix;
 using Vector2 = Microsoft.Xna.Framework.Vector2;
 using Vector3 = Microsoft.Xna.Framework.Vector3;
@@ -50,6 +48,16 @@ namespace Wireframe_space
             Components.Add(new MainMenu(this));
 
             base.Initialize();
+        }
+
+        protected override void OnExiting(object sender, EventArgs args)
+        {
+            foreach (GameComponent m in Components)
+                if (m == MultiplayerManager.manager)
+                {
+                    MultiplayerManager man = (MultiplayerManager)m;
+                    man.DestroyNet();
+                }
         }
 
         protected override void LoadContent()
@@ -146,6 +154,7 @@ namespace Wireframe_space
 
         public Vector3 pos = new Vector3(0, 0, 0);
         public Entity entity;
+        public float scale = 1;
 
         private VertexPositionColor[] points;
         private short[] polygons;

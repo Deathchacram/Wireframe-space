@@ -10,6 +10,8 @@ namespace Wireframe_space
 {
     class ClientObject
     {
+
+        public int clientId = -1;
         private MultiplayerManager manager;
         private Socket client;
         private Server server;
@@ -27,6 +29,7 @@ namespace Wireframe_space
             {
                 for (int i = 0; i < manager.subjects.Count; i++)
                 {
+                    Thread.Sleep(1);
                     float[] data;
                     if (manager.subjects[i].entity != null)
                     {
@@ -85,7 +88,7 @@ namespace Wireframe_space
                     //send free id
                     else
                     {
-                        int id = manager.FindFreeId();
+                        int id = clientId = manager.FindFreeId();
                         //add
                         //manager.players.Add(id, this);
                         data = new float[2] { 0.5f, id };

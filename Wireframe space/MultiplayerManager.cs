@@ -2,9 +2,10 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using Mono.Nat;
+using Open.Nat;
+using System;
 using System.Collections.Generic;
-using System.Threading;
+using System.Net;
 using System.Threading.Tasks;
 using Wireframe_space.NetCode;
 using Matrix = Microsoft.Xna.Framework.Matrix;
@@ -30,16 +31,18 @@ namespace Wireframe_space
         public Server server;
         public Subject playerSubject;
         public static IPlayer player;
+        public List<Subject> toDestroy = new List<Subject>();
 
         //debug
         public string s = "";
         int counter = 0;
 
         //other
-        //private INatDevice device;
+        private NatDevice device;
         public Game game;
         public SpriteFont font;
         Effect basicEffect;
+        IPAddress externalIP, serverIP;
 
         VertexPositionColor[] points = new VertexPositionColor[8]
         {
@@ -64,11 +67,19 @@ namespace Wireframe_space
             this.game = game;
             manager = this;
         }
-        protected override void LoadContent()
+        public MultiplayerManager(Game game, string ip) : base(game)
+        {
+            serverIP = IPAddress.Parse(ip);
+            this.game = game;
+            manager = this;
+        }
+        async protected override void LoadContent()
         {
             //NatUtility.DeviceFound += DeviceFound;
             //NatUtility.DeviceLost += DeviceLost;
             //NatUtility.StartDiscovery();
+
+            CreateNet();
 
             Subject.basicEffect = game.Content.Load<Effect>("BaseEffect");
             Subject.basicEffect.Parameters[0].SetValue(Matrix.CreatePerspectiveFieldOfView(3.14f / 3, 1.6667f, 0.1f, 300));
@@ -78,11 +89,16 @@ namespace Wireframe_space
 
             if (isServer)
             {
-                for (int i = 0; i < 25; i++)
+                for (int i = 0; i < 200; i++)
                 {
                     int freeId = FindFreeId();
                     Quaternion q = Quaternion.Identity;
-                    float[] cmd = new float[13] { 0, freeId, 3, 0, i * 2, q.X, q.Y, q.Z, q.W, 0, 0, 0, 0 };   //create player
+                    Random rnd = new Random();
+                    //float[] cmd = new float[13] { 0, freeId, 3, 0, i * 2, q.X, q.Y, q.Z, q.W, 0, 0, 0, 0 };
+                    //commands.Add(cmd);
+
+                    //freeId = FindFreeId();
+                    float[] cmd = new float[13] { 0, freeId, rnd.Next(-100, 100), rnd.Next(-100, 100), rnd.Next(-100, 100), q.X, q.Y, q.Z, q.W, 0, 0, 0, 0 };
                     commands.Add(cmd);
 
                     /*Box box = new Box(BEPUutilities.Vector3.Zero, 1, 1, 1, 1);
@@ -104,6 +120,11 @@ namespace Wireframe_space
             {
                 player = new PlayerClient(this);
                 client = new Client(this);
+                client.externalIp = externalIP;
+                if (serverIP != null)
+                {
+                    client.serverIp = serverIP;
+                }
                 Task task = new Task(client.Connect);
                 task.Start();
                 //connect = new Thread(client.Connect);
@@ -115,6 +136,7 @@ namespace Wireframe_space
         {
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
             {
+                //Thread.Sleep(1000);
                 game.Exit();
             }
             if (isServer)
@@ -127,6 +149,9 @@ namespace Wireframe_space
                     //commands.Add(new float[3] { 1, subjects.Count - 1, subjects.Count - 1 });
                 }
             }
+
+            for (int i = 0; i < toDestroy.Count; i++)
+                toDestroy[0].Destroy();
 
             while (commands.Count != 0)
             {
@@ -151,7 +176,11 @@ namespace Wireframe_space
                 }
             }
             player.Update(gameTime);
-            space.Update();
+            try
+            {
+                space.Update();
+            }
+            catch { }
         }
         public override void Draw(GameTime gameTime)
         {
@@ -162,7 +191,10 @@ namespace Wireframe_space
             sb.Begin();
             sb.DrawString(font, "O", new Vector2(395, 235), Color.White);
             sb.DrawString(font, subjects.Count + " " + space.Entities.Count, new Vector2(0, 60), Color.White);
+            if (externalIP != null)
+                sb.DrawString(font, externalIP.ToString(), new Vector2(660, 20), Color.White);
             sb.End();
+
             if (isServer)
             {
                 sb.Begin();
@@ -192,17 +224,17 @@ namespace Wireframe_space
             {
                 sb.Begin();
                 sb.DrawString(font, commands.Count.ToString() + s, new Vector2(0, 20), Color.White);
-                string a = "";
-                for(int i = 0; i < subjects.Count; i += 10)
+                /*string a = "";
+                for (int i = 0; i < subjects.Count; i += 10)
                 {
-                    for(int l = 0; l < 7; l++)
+                    for (int l = 0; l < 7; l++)
                     {
-                        if(i + l < subjects.Count)
-                        a += "id:" + subjects[i + l].id + "pos:" + subjects[i + l].entity.Position.ToString();
+                        if (i + l < subjects.Count)
+                            a += "id:" + subjects[i + l].id + "pos:" + subjects[i + l].entity.Position.ToString();
                     }
                     a += '\n';
                 }
-                sb.DrawString(font, a, new Vector2(0, 40), Color.White);
+                sb.DrawString(font, a, new Vector2(0, 40), Color.White);*/
                 sb.End();
                 for (int i = 0; i < subjects.Count; i++)
                 {
@@ -221,7 +253,7 @@ namespace Wireframe_space
         }
         public int FindFreeId()
         {
-            
+
             for (int i = 0; i < idCollection.Count; i++)
                 if (idCollection.IndexOf(i) == -1)
                 {
@@ -233,51 +265,42 @@ namespace Wireframe_space
             return idCollection.Count - 1;
         }
 
-        /*private async void DeviceFound(object sender, DeviceEventArgs args)
+        private async void CreateNet()
         {
-            device = args.Device;
+            var discoverer = new NatDiscoverer();
+            //var cts = new CancellationTokenSource(10000);
+            //var device = await discoverer.DiscoverDeviceAsync(PortMapper.Upnp, cts);
+            device = await discoverer.DiscoverDeviceAsync();
+            var m = device.GetAllMappingsAsync().Result;
+            externalIP = await device.GetExternalIPAsync();
+            if (client != null)
+                client.externalIp = externalIP;
 
             if (isServer)
             {
-                device.CreatePortMap(new Mapping(Protocol.Tcp, 26386, 26386, 0, "tcp1"));
+                if (await device.GetSpecificMappingAsync(Protocol.Tcp, 26386) == null)
+                    await device.CreatePortMapAsync(new Mapping(Protocol.Tcp, 26386, 26386, "Tcp server"));
 
-                device.CreatePortMap(new Mapping(Protocol.Udp, 26388, 26388, 0, "udp2"));
+                if (await device.GetSpecificMappingAsync(Protocol.Udp, 26387) == null)
+                    await device.CreatePortMapAsync(new Mapping(Protocol.Udp, 26387, 26387, "Udp server"));
             }
             else
-                device.CreatePortMap(new Mapping(Protocol.Udp, 26387, 26387, 0, "udp1"));
-
-            *//*bool flag;
-            var mappings = await device.GetAllMappingsAsync();
-            for(int i = 26387; i < 26390; i++)
             {
-                flag = true;
-                foreach(var mapping in mappings)
-                {
-                    if(mapping.PublicPort == i)
-                    {
-                        flag = false;
-                    }
-                }
-                if (flag)
-                {
-                    device.CreatePortMap(new Mapping(Protocol.Udp, i, i, 0, "udp1"));
-                    i = 26390;
-                }
-            }*/
+                if (await device.GetSpecificMappingAsync(Protocol.Udp, 26388) == null)
+                    await device.CreatePortMapAsync(new Mapping(Protocol.Udp, 26388, 26388, "Udp client"));
+                else if (await device.GetSpecificMappingAsync(Protocol.Udp, 26389) == null)
+                    await device.CreatePortMapAsync(new Mapping(Protocol.Udp, 26389, 26389, "Udp client"));
+                else if (await device.GetSpecificMappingAsync(Protocol.Udp, 26390) == null)
+                    await device.CreatePortMapAsync(new Mapping(Protocol.Udp, 26390, 26390, "Udp client"));
+            }
 
-            /*foreach (Mapping portMap in device.GetAllMappings())
-                s += '\n' + portMap.ToString();*//*
-
-            //ipadr = device.GetExternalIP();
         }
-
-        private void DeviceLost(object sender, DeviceEventArgs args)
+        public async void DestroyNet()
         {
-            device = args.Device;
-
-            //if (device.GetSpecificMapping(Protocol.Tcp, 26386).PublicPort > -1)
-            //    device.DeletePortMap(new Mapping(Protocol.Tcp, 26386, 26386));
-        }*/
+            await device.DeletePortMapAsync(new Mapping(Protocol.Tcp, 26386, 26386, "Tcp server"));
+            await device.DeletePortMapAsync(new Mapping(Protocol.Udp, 26388, 26388, "Udp server"));
+            await device.DeletePortMapAsync(new Mapping(Protocol.Udp, 26387, 26387, "Udp client"));
+        }
     }
     interface IPlayer
     {

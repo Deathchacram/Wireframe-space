@@ -15,7 +15,7 @@ namespace Wireframe_space.NetCode
         public int playerId = -1;
         public static Subject player;
 
-        private bool flag = false, flag2 = false;
+        private bool idRequest = false, playerCreated = false;
         private List<int> bulletsId = new List<int>();
         private MultiplayerManager manager;
         private VertexPositionColor[] points = new VertexPositionColor[8]
@@ -36,11 +36,12 @@ namespace Wireframe_space.NetCode
             0, 4, 1, 5, 2, 6, 3, 7,         //side edges
         };
         private PlayerControl control;
+        private int tickrate = 60;
 
         public PlayerClient(MultiplayerManager manager)
         {
             this.manager = manager;
-            control = new PlayerControl(manager);
+            control = new PlayerControl(manager, player);
 
             Task task = new Task(PositionUpdate);
             task.Start();
@@ -67,6 +68,7 @@ namespace Wireframe_space.NetCode
                     s = player = new Subject((int)cmd[1], 1, "player", manager.game);
                     player.SetModel(points, lines, box);
                     player.hp = 3;
+                    control.player = player;
                     /*Box box = new Box(BEPUutilities.Vector3.Zero, 1, 1, 1, 1);
                     manager.space.Add(box);
                     s = player = new Subject((int)cmd[1], 1, "player", manager.game);
@@ -118,6 +120,15 @@ namespace Wireframe_space.NetCode
             //0 - command number, 1 - serial number in array, 2 - id (check)
             try
             {
+                if((int)cmd[2] == playerId)
+                {
+                    manager.subjects.Remove(player);
+                    player.Destroy();
+                    player = null;
+
+                    playerId = -1;
+                    idRequest = playerCreated = false;
+                }
                 if (manager.subjects[(int)cmd[1]].id == (int)cmd[2])
                     manager.subjects[(int)cmd[1]].Destroy();
                 else
@@ -137,19 +148,20 @@ namespace Wireframe_space.NetCode
 
         public void Update(GameTime gameTime)
         {
-            if (manager.client.connected && !flag)  //request a unique id
+            if (manager.client.connected && !idRequest)  //request a unique id
             {
-                Thread.Sleep(100);
+                //Thread.Sleep();
                 manager.client.SendTcp(new float[] { 0.5f });
-                flag = true;
+                idRequest = true;
             }
-            else if (playerId != -1 && !flag2)  //create player
+            else if (playerId != -1 && !playerCreated)  //create player
             {
                 Vector3 pos = new Vector3(-5, -5, 0);
                 Quaternion quat = Quaternion.Identity;
                 Vector3 speed = Vector3.Zero;
                 manager.client.CreateObj(playerId, pos, quat, speed, 1);
-                flag2 = true;
+
+                playerCreated = true;
             }
 
             if (player != null)
@@ -170,25 +182,30 @@ namespace Wireframe_space.NetCode
         {
             while (true)
             {
-                if (player != null)
+                Thread.Sleep(1000 / tickrate);
+                try
                 {
-                    Thread.Sleep(100);
-                    int serialNumber = manager.subjects.IndexOf(player);
-                    BEPUutilities.Vector3 pos = player.entity.Position;
-                    Quaternion quat = Quaternion.Identity;
-                    float[] data = new float[9] { serialNumber, playerId, pos.X, pos.Y, pos.Z, quat.X, quat.Y, quat.Z, quat.W };
-                    manager.client.SendUdp(data);
+                    if (player != null)
+                    {
+                        int serialNumber = manager.subjects.IndexOf(player);
+                        BEPUutilities.Vector3 pos = player.entity.Position;
+                        BEPUutilities.Quaternion quat = player.entity.Orientation;
+                        float[] data = new float[9] { serialNumber, playerId, pos.X, pos.Y, pos.Z, quat.X, quat.Y, quat.Z, quat.W };
+                        manager.client.SendUdp(data);
+                    }
                 }
+                catch { }
             }
         }
 
         public void Draw()
         {
-            /*SpriteBatch sb = manager.game.Services.GetService<SpriteBatch>();
+            SpriteBatch sb = manager.game.Services.GetService<SpriteBatch>();
 
             sb.Begin();
-            sb.DrawString(manager.font, player.entity.LinearVelocity.ToString(), new Vector2(0, 0), Color.White);
-            sb.End();*/
+            if (player != null)
+                sb.DrawString(manager.font, player.hp.ToString(), new Vector2(0, 0), Color.White);
+            sb.End();
         }
 
         public void DealDamage(float[] cmd)

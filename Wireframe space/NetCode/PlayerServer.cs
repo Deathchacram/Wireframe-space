@@ -4,6 +4,7 @@ using BEPUphysics.Entities.Prefabs;
 using BEPUphysics.NarrowPhaseSystems.Pairs;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using System.Collections.Generic;
 
 namespace Wireframe_space.NetCode
 {
@@ -13,6 +14,7 @@ namespace Wireframe_space.NetCode
         public static Subject player;
 
         private MultiplayerManager manager;
+        private List<int> bulletsId = new List<int>();
         private Server server;
         private VertexPositionColor[] points = new VertexPositionColor[8]
         {
@@ -39,13 +41,14 @@ namespace Wireframe_space.NetCode
         {
             this.manager = manager;
             this.server = server;
-            control = new PlayerControl(manager);
 
             playerId = manager.id = manager.FindFreeId();
             Quaternion q = Quaternion.Identity;
             float[] cmd = new float[13] { 0, playerId, 0, 0, 0, q.X, q.Y, q.Z, q.W, 0, 0, 0, 1 };   //create player
             //manager.commands.Add(cmd);
             CreateObj(cmd);
+
+            control = new PlayerControl(manager, player);
         }
 
         public void CreateObj(float[] cmd)
@@ -88,6 +91,8 @@ namespace Wireframe_space.NetCode
                 s = new Subject((int)cmd[1], (int)cmd[12], "asteroid", manager.game);
                 s.SetModel(points, lines, box);
             }
+            if (s.type == 1)
+                s.hp = 3;
 
             manager.subjects.Add(s);
             server.CreateObj((int)cmd[1], posv, quaternion, speedv, (int)cmd[12]);
@@ -117,6 +122,16 @@ namespace Wireframe_space.NetCode
             server.DestroyObj((int)cmd[1], (int)cmd[2]);
 
             manager.commands.Remove(cmd);
+
+            if((int)cmd[2] == playerId)
+            {
+                playerId = manager.id = manager.FindFreeId();
+                Quaternion q = Quaternion.Identity;
+                float[] c = new float[13] { 0, playerId, 0, 0, 0, q.X, q.Y, q.Z, q.W, 0, 0, 0, 1 };   //create player
+                                                                                                      //manager.commands.Add(cmd);
+                CreateObj(c);
+                control.player = player;
+            }
         }
 
         public void Update(GameTime gameTime)
@@ -149,8 +164,9 @@ namespace Wireframe_space.NetCode
             string comp = "X: " + compensation.X.ToString("0.000") + " Y: " + compensation.Y.ToString("0.000") + " Z: " + compensation.Z.ToString("0.000");
 
             sb.Begin();
-            sb.DrawString(manager.font, speed, new Vector2(0, 0), Color.White);
-            sb.DrawString(manager.font, comp, new Vector2(20, 30), Color.White);
+            ///sb.DrawString(manager.font, speed, new Vector2(0, 0), Color.White);
+            //sb.DrawString(manager.font, comp, new Vector2(20, 30), Color.White);
+            sb.DrawString(manager.font, player.hp.ToString(), new Vector2(20, 30), Color.White);
             sb.End();
         }
 
@@ -185,6 +201,7 @@ namespace Wireframe_space.NetCode
                         manager.subjects[i].Destroy();
                     }
             */
+
             manager.server.DealDamage((int)cmd[1], (int)cmd[2]);
             manager.commands.Remove(cmd);
         }

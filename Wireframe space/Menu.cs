@@ -34,7 +34,9 @@ namespace Wireframe_space
             FileStream file = File.Open(path, FileMode.Open);
             var bf = new XmlSerializer(typeof(CustomMesh));
             CustomMesh model = bf.Deserialize(file) as CustomMesh;
-            models.Add(new Model(model, new Vector3(0, 0, 100)));
+            Model m = new Model(model, new Vector3(0, 0, 100));
+            //m.scale = 1f;
+            models.Add(m);
             //models[0].SetEntity(space, 5000);
             //space.Entities[0].Position = new BEPUutilities.Vector3(0, 0, 100);
 
@@ -54,6 +56,7 @@ namespace Wireframe_space
                 float y = rand * 10;
                 float z = 55 * (float)Math.Cos(rand * 62.831f) + (rand - 0.5f) * 15 + 100;
                 Model mdl = new Model(model, new Vector3(x, y, z));
+                //mdl.scale = 10f;
                 models.Add(mdl);
                 modelPos.Add(rand);
                 rand = (float)rnd.NextDouble();
@@ -91,7 +94,8 @@ namespace Wireframe_space
 
             horizontalAngle = rot.X / 4;
             verticalAngle = rot.Y / 4;
-*/
+            */
+
             for (int i = 0; i < models.Count - 1; i++)
             {
                 modelPos[i] = (modelPos[i] + delta) % 1;
@@ -150,6 +154,14 @@ namespace Wireframe_space
                 Text = "Не работает"
             };
             desktop.Widgets.Add(button4);
+            var tb = new TextBox
+            {
+                Left = 20,
+                Top = 150,
+                Width = 150,
+                Text = "176.193.179.34"
+            };
+            desktop.Widgets.Add(tb);
             //button.Visible = false;
             return desktop;
         }
